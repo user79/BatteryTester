@@ -53,6 +53,8 @@
    SMCLK = 8MHz
    baudrate = 28.8kbps
 
+   //temporarily modified: 2/12/2025: 115200 bps, SMCLK 8MHz
+
    If you change the SMCLK speed, or want a different baudrate, you need to
    change these values.  An easy way to determine them is the calculator at
    the MSP430 wiki page:
@@ -65,10 +67,10 @@ http://processors.wiki.ti.com/index.php/USCI_UART_Baud_Rate_Gen_Mode_Selection
    Guide.) */
 
 #define UCA1_OS   1    // 1 = oversampling mode, 0 = low-freq mode
-#define UCA1_BR0  17   // Value of UCA1BR0 register
+#define UCA1_BR0  4    //17   // Value of UCA1BR0 register
 #define UCA1_BR1  0    // Value of UCA1BR1 register
-#define UCA1_BRS  0    // Value of UCBRS field in UCA1MCTL register
-#define UCA1_BRF  6    // Value of UCBRF field in UCA1MCTL register
+#define UCA1_BRS  5    //0    // Value of UCBRS field in UCA1MCTL register
+#define UCA1_BRF  3    //6    // Value of UCBRF field in UCA1MCTL register
 
 
 // There is no hardware RTS/CTS handshaking in this example.  Your code must

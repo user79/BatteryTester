@@ -6,6 +6,7 @@
 #include "driverlib/MSP430F5xx_6xx/ucs.h"
 #include "driverlib/MSP430F5xx_6xx/wdt_a.h"
 #include "intrinsics.h"
+#include "msp430f5529.h"
 #include "types.h"
 #include <msp430.h>
 
@@ -22,13 +23,27 @@ volatile BYTE batteryRemoved;
 
 
 
-void takeSample(void) 
+long takeSample(void) 
 {
     ADC12CTL0 |= ADC12SC; // Start sampling/conversion
     __bis_SR_register(LPM0_bits + GIE);
+    long temp = ADC12MEM0 * 4 / 5;
+    return temp;
 }
 
-void takeSampleAndSendToUART(void) 
+void SendToUART(long num) 
+{
+      // send to the backchannel uart ("MSP Application UART" in device manager)
+      buf_usbToBcuart[0] = (num / 1000) + '0';
+      buf_usbToBcuart[1] = (num / 100) % 10 + '0';
+      buf_usbToBcuart[2] = (num / 10) % 10 + '0';
+      buf_usbToBcuart[3] = (num) % 10 + '0';
+      buf_usbToBcuart[4] = '\r';
+      buf_usbToBcuart[5] = '\n';
+      bcUartSend(buf_usbToBcuart, 6);
+}
+
+long takeSampleAndSendToUART(void) 
 {
     ADC12CTL0 |= ADC12SC; // Start sampling/conversion
     __bis_SR_register(LPM0_bits + GIE);
@@ -44,6 +59,8 @@ void takeSampleAndSendToUART(void)
       buf_usbToBcuart[4] = '\r';
       buf_usbToBcuart[5] = '\n';
       bcUartSend(buf_usbToBcuart, 6);
+
+      return calibAdcVal;
 }
 
 
@@ -57,7 +74,9 @@ int main(void) {
   ADC12CTL0 |= ADC12ENC;
   P6SEL |= 0x01; // P6.0 ADC option select
   P1DIR |= 0x01; // P1.0 output
-  int counter = 0;
+  //buf_usbToBcuart[4] = '\r';
+  //buf_usbToBcuart[5] = '\n';
+  //int counter = 0;
   batteryInserted = 0;
   batteryRemoved = 0;
 
@@ -67,6 +86,8 @@ int main(void) {
   initPorts();         // Config all the GPIOS for low-power (output low)
   initClocks(8000000); // Config clocks. MCLK=SMCLK=FLL=8MHz; ACLK=REFO=32kHz
   bcUartInit();        // Init the back-channel UART
+
+
 
   // pseudocode: 
   // take conversion
@@ -81,75 +102,51 @@ int main(void) {
   while (1) {
     //ADC12CTL0 |= ADC12SC; // Start sampling/conversion
     //__bis_SR_register(LPM0_bits + GIE); // LPM0, ADC12_ISR will force exit
-    takeSample();
+    //takeSample();
 
-    if (batteryInserted) { // non-zero voltage detected by ADC
-      const SAMPLEDELAY = 800000;
+    if ((P2IN & BIT1) == 0) { // if pushbutton is pressed
+      const unsigned long int SAMPLEDELAY = 400000;
+      const int numSamples = 16;
+      int i=0;
+      long cumsum = 0;
 
-      __delay_cycles(SAMPLEDELAY);
-      takeSampleAndSendToUART();
-      __delay_cycles(SAMPLEDELAY);
-      takeSampleAndSendToUART();
-      __delay_cycles(SAMPLEDELAY);
-      takeSampleAndSendToUART();
-      __delay_cycles(SAMPLEDELAY);
-      takeSampleAndSendToUART();
+      // first take the "unloaded" samples
+      for(i =0; i< numSamples; i++)
+      {
+         __delay_cycles(SAMPLEDELAY);
+         //takeSampleAndSendToUART();
+         cumsum += takeSample();          
+      }
+      SendToUART(cumsum/numSamples) ;
 
+      
+      // next take the "loaded---100 ohm" samples
       P1OUT |= BIT6;
-      __delay_cycles(SAMPLEDELAY);
-      takeSampleAndSendToUART();
-      __delay_cycles(SAMPLEDELAY);
-      takeSampleAndSendToUART();
-      __delay_cycles(SAMPLEDELAY);
-      takeSampleAndSendToUART();
-      __delay_cycles(SAMPLEDELAY);
-      takeSampleAndSendToUART();
+      cumsum = 0;
+      for(i =0; i< numSamples; i++)
+      {
+         __delay_cycles(SAMPLEDELAY);
+         //takeSampleAndSendToUART();
+         cumsum += takeSample();          
+      }
       P1OUT &= ~BIT6;
-
-      P1OUT |= BIT5;
-      __delay_cycles(SAMPLEDELAY);
-      takeSampleAndSendToUART();
-      __delay_cycles(SAMPLEDELAY);
-      takeSampleAndSendToUART();
-      __delay_cycles(SAMPLEDELAY);
-      takeSampleAndSendToUART();
-      __delay_cycles(SAMPLEDELAY);
-      takeSampleAndSendToUART();
-      P1OUT &= ~BIT5;      
+      SendToUART(cumsum/numSamples) ;
 
 
-      __delay_cycles(SAMPLEDELAY);
-      takeSampleAndSendToUART();
-      __delay_cycles(SAMPLEDELAY);
-      takeSampleAndSendToUART();
-      __delay_cycles(SAMPLEDELAY);
-      takeSampleAndSendToUART();
-      __delay_cycles(SAMPLEDELAY);
-      takeSampleAndSendToUART();
+      // next take the "loaded---10 ohm" samples
+      P1OUT |= BIT4;
+      cumsum = 0;
+      for(i =0; i< numSamples; i++)
+      {
+         __delay_cycles(SAMPLEDELAY);
+         //takeSampleAndSendToUART();
+         cumsum += takeSample();          
+      }
+      P1OUT &= ~BIT4;
+      SendToUART(cumsum/numSamples) ;
 
-      P1OUT |= BIT6;
-      __delay_cycles(SAMPLEDELAY);
-      takeSampleAndSendToUART();
-      __delay_cycles(SAMPLEDELAY);
-      takeSampleAndSendToUART();
-      __delay_cycles(SAMPLEDELAY);
-      takeSampleAndSendToUART();
-      __delay_cycles(SAMPLEDELAY);
-      takeSampleAndSendToUART();
-      P1OUT &= ~BIT6;
 
-      P1OUT |= BIT5;
-      __delay_cycles(SAMPLEDELAY);
-      takeSampleAndSendToUART();
-      __delay_cycles(SAMPLEDELAY);
-      takeSampleAndSendToUART();
-      __delay_cycles(SAMPLEDELAY);
-      takeSampleAndSendToUART();
-      __delay_cycles(SAMPLEDELAY);
-      takeSampleAndSendToUART();
-      P1OUT &= ~BIT5;      
-
-      batteryInserted = 0; // wait until the next battery insertion
+      //batteryInserted = 0; // wait until the next battery insertion
 
       // P1OUT |= BIT6;
       //__delay_cycles(800000);
@@ -189,16 +186,16 @@ void __attribute__((interrupt(ADC12_VECTOR))) ADC12_ISR(void)
   case 6:                   // Vector  6:  ADC12IFG0
     if (ADC12MEM0 >= 0x1ff) // ADC12MEM = A0 > 0.5AVcc?
     {
-      // P1OUT |= BIT0;                        // P1.0 = 1
-      if (batteryRemoved == 1)
-          batteryInserted = 1;
-      batteryRemoved = 0;
-      __delay_cycles(1000000); // todo: remove delay from ISR, replace with timer
+       P1OUT |= BIT0;                        // P1.0 = 1
+      //if (batteryRemoved == 1)
+     //     batteryInserted = 1;
+      //batteryRemoved = 0;
+      //__delay_cycles(1000000); // todo: remove delay from ISR, replace with timer
     } else {
-      // P1OUT &= ~BIT0;                       // P1.0 = 0
-      batteryRemoved = 1;
-      batteryInserted = 0;
-      __delay_cycles(1000000); // todo: remove delay from ISR, replace with timer
+       P1OUT &= ~BIT0;                       // P1.0 = 0
+     // batteryRemoved = 1;
+      //batteryInserted = 0;
+      //__delay_cycles(1000000); // todo: remove delay from ISR, replace with timer
     }
 
     __bic_SR_register_on_exit(LPM0_bits); // Exit active CPU

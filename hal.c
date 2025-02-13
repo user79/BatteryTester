@@ -41,6 +41,7 @@
 #include "driverlib/MSP430F5xx_6xx/pmm.h"
 
 #include "device.h" //"USB_API/USB_Common/device.h"
+#include "msp430f5529.h"
 #include "types.h" ///"USB_API/USB_Common/types.h"
 //#include "USB_config/descriptors.h"
 
@@ -55,8 +56,11 @@ void initPorts(void)
 {
     P1OUT = 0x00;
     P1DIR = 0xFF;
-    P2OUT = 0x00;
-    P2DIR = 0xFF;
+    P2OUT = 0x00;      
+    //P2DIR = 0xFF;
+      P2DIR = 0;
+      P2REN |= BIT1; // bit 1 for the S2 pushbutton
+      P2OUT |= BIT1; // pull-up resistor
     P3OUT = 0x00;
     P3DIR = 0xFF;
     P4OUT = 0x00;
